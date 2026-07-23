@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>六爻解籤</title>
+    <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+TC:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="butterfly-bg"></div>
+
+    <!-- 頂部功能列 -->
+    <header class="top-nav">
+        <span id="user-status-tag" style="font-size: 0.8rem; color: var(--text-sub); display: flex; align-items: center; margin-right: 5px;">未登入</span>
+        <button id="btn-login" class="nav-icon-btn" style="background: var(--mode-card-bg);" title="帳號登入">🔑 登入</button>
+        <button id="btn-vip-upgrade" class="nav-icon-btn" style="background: #b89758; color: #fff; border-color: #b89758;" title="VIP 升級">👑 VIP方案</button>
+        <button id="btn-history-toggle" class="nav-icon-btn" title="歷史紀錄">📖 紀錄</button>
+        <button id="btn-theme-toggle" class="nav-icon-btn" title="切換深色模式">🌙 深色</button>
+    </header>
+
+    <!-- 登入 / 綁定 Email 彈窗 -->
+    <div id="login-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-box" style="max-width: 380px; text-align: left;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 class="modal-title" style="margin: 0; font-size: 1.1rem;">🔑 帳號登入與綁定</h3>
+                <button id="btn-close-login" class="close-btn" style="font-size: 1.2rem; cursor: pointer;">✕</button>
+            </div>
+            <p style="font-size: 0.85rem; color: var(--text-sub); margin-bottom: 15px; line-height: 1.5;">
+                輸入您的 Email 綁定帳號，即可跨裝置保留您的 VIP 權限與歷史紀錄。
+            </p>
+            <input type="email" id="user-email-input" class="question-input" placeholder="請輸入您的 Email" style="font-size: 1rem; margin-bottom: 20px; text-align: left;">
+            <button id="btn-submit-login" class="cast-btn" style="width: 100%; background: #304758; color: #fff; font-size: 1rem; padding: 10px;">確認綁定登入</button>
+        </div>
+    </div>
+
+    <!-- 歷史紀錄側邊抽屜 -->
+    <div id="history-drawer" class="history-drawer">
+        <div class="drawer-header">
+            <h3>📜 歷史卦象紀錄</h3>
+            <button id="btn-close-drawer" class="close-btn">✕</button>
+        </div>
+        <p id="history-tier-hint" style="font-size: 0.8rem; color: var(--text-sub); margin-bottom: 12px; padding: 0 5px;"></p>
+        <div id="history-list" class="drawer-content"></div>
+    </div>
+
+    <!-- 歷史紀錄詳情彈窗 -->
+    <div id="history-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-box" style="text-align: left;">
+            <h3 id="modal-h-title" class="modal-title" style="text-align: center; margin-bottom: 15px;"></h3>
+            <p id="modal-h-time" style="font-size: 0.85rem; color: var(--text-sub); margin-bottom: 15px; text-align: center;"></p>
+            <div id="modal-h-content" style="font-size: 0.95rem; line-height: 1.6; margin-bottom: 20px; max-height: 40vh; overflow-y: auto; background: var(--mode-card-bg); padding: 12px; border-radius: 8px;"></div>
+            <div style="display: flex; gap: 10px;">
+                <button id="modal-h-copy" class="cast-btn" style="flex: 1; font-size: 0.9rem; padding: 10px;">📋 複製報告</button>
+                <button id="modal-h-close" class="cast-btn" style="flex: 1; font-size: 0.9rem; padding: 10px; background: #8b2626; border-color: #8b2626; color: #fff;">關閉</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIP 方案訂閱彈窗 -->
+    <div id="vip-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-box" style="max-width: 480px; text-align: left;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2 class="modal-title" style="margin: 0;">👑 解鎖六爻 VIP 尊榮權益</h2>
+                <button id="btn-close-vip" class="close-btn" style="font-size: 1.2rem; cursor: pointer;">✕</button>
+            </div>
+            <p style="font-size: 0.85rem; color: var(--text-sub); margin-bottom: 15px; line-height: 1.5;">
+                升級 VIP，解鎖無限次數、專業銅錢納甲法、30日完整歷史與進階 500 字 AI 深度引導。
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+                <div class="vip-plan-card" data-plan="day" style="background: var(--mode-card-bg); border: 1px solid var(--border-color); padding: 12px 15px; border-radius: 8px; cursor: pointer; transition: all 0.3s;">
+                    <div style="display: flex; justify-content: space-between; font-weight: 600; color: var(--text-dark); margin-bottom: 2px;">
+                        <span>單日體驗 VIP</span><span>NT$ 30 / 天</span>
+                    </div>
+                    <p style="font-size: 0.75rem; color: var(--text-sub);">適合想嘗鮮、急用一次的人</p>
+                </div>
+                <div class="vip-plan-card" data-plan="month" style="background: var(--mode-card-bg); border: 1px solid var(--border-color); padding: 12px 15px; border-radius: 8px; cursor: pointer; transition: all 0.3s;">
+                    <div style="display: flex; justify-content: space-between; font-weight: 600; color: var(--text-dark); margin-bottom: 2px;">
+                        <span>月訂閱 VIP</span><span>NT$ 99 / 月</span>
+                    </div>
+                    <p style="font-size: 0.75rem; color: var(--text-sub);">彈性靈活，隨時可取消</p>
+                </div>
+                <div class="vip-plan-card selected" data-plan="year" style="background: rgba(184, 151, 88, 0.1); border: 1px solid #b89758; padding: 12px 15px; border-radius: 8px; cursor: pointer; transition: all 0.3s;">
+                    <div style="display: flex; justify-content: space-between; font-weight: 600; color: #b89758; margin-bottom: 2px;">
+                        <span>年度 VIP ⭐ 最熱門</span><span>NT$ 299 / 年</span>
+                    </div>
+                    <p style="font-size: 0.75rem; color: var(--text-sub);">平均一天不到 1 塊錢，超高性價比</p>
+                </div>
+                <div class="vip-plan-card" data-plan="forever" style="background: rgba(139, 38, 38, 0.08); border: 1px solid #8b2626; padding: 12px 15px; border-radius: 8px; cursor: pointer; transition: all 0.3s;">
+                    <div style="display: flex; justify-content: space-between; font-weight: 600; color: #8b2626; margin-bottom: 2px;">
+                        <span>永久買斷 VIP 🔥 限量早鳥</span><span>NT$ 599 (終身)</span>
+                    </div>
+                    <p style="font-size: 0.75rem; color: var(--text-sub);">限時早鳥價，一個月後調漲為 NT$ 999</p>
+                </div>
+            </div>
+            <button id="btn-simulate-buy" class="cast-btn" style="width: 100%; background: #b89758; border-color: #b89758; color: #fff; font-size: 1rem; padding: 12px;">確認訂閱所選方案 (模擬付款)</button>
+        </div>
+    </div>
+
+    <!-- 儀式感三誡彈窗 -->
+    <div id="rules-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h2 class="modal-title">📜 搖卦前，請靜心閱讀此三誡</h2>
+            <ul class="modal-rules">
+                <li>① 一卦專問一事，問題越具體，回饋越清晰。</li>
+                <li>② 心誠則靈，搖卦前請深呼吸，默念您的問題。</li>
+                <li>③ 同一事七日內勿重複問，信任第一次的啟示。</li>
+            </ul>
+            <p class="modal-hint">子時（23:00-01:00）卦象易受潛意識影響，重大決策請待天明再問。</p>
+            <div class="modal-actions">
+                <button id="reject-btn" class="btn-reject">我再想想</button>
+                <button id="agree-btn" class="btn-agree">我已靜心，開始搖卦</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主內容區塊 -->
+    <div class="container blur-mode" id="main-container">
+        <header class="main-header">
+            <h1 class="calligraphy-title" id="dev-trigger" title="點擊 5 下切換開發者/VIP模式">六爻解籤</h1>
+            <p class="subtitle">莊周夢蝶，心誠則靈</p>
+        </header>
+
+        <!-- 步驟一：選擇起卦模式 -->
+        <div id="step-mode" class="step-section">
+            <h2 class="section-title">請選擇起卦方式</h2>
+            <div class="mode-cards">
+                <div class="mode-card" id="card-time">
+                    <div class="mode-icon">🕐</div>
+                    <h3>時間起卦</h3>
+                    <p>簡易快占<br>問大方向與整體運勢</p>
+                </div>
+                <div class="mode-card" id="card-coin">
+                    <div class="mode-icon">🪙</div>
+                    <h3>銅錢起卦 <span style="font-size: 0.75rem; color: #b89758; display: block; margin-top: 4px;">👑 VIP限定</span></h3>
+                    <p>傳統六爻<br>問具體決策與短期吉凶</p>
+                </div>
+            </div>
+            <p id="daily-limit-hint" style="font-size: 0.85rem; color: var(--text-sub); margin-top: 25px; letter-spacing: 1px;"></p>
+        </div>
+
+        <!-- 步驟二：輸入問題 -->
+        <div id="step-question" class="step-section" style="display: none;">
+            <p id="mode-hint-text" class="mode-hint"></p>
+            <input type="text" id="user-question" class="question-input" placeholder="例：「我想知道下個月轉職的整體狀態」" autocomplete="off">
+            <p style="font-size: 0.8rem; color: var(--text-sub); margin-top: -25px; margin-bottom: 25px; letter-spacing: 1px;">
+                💡 守則：一卦一問，請填寫今天最想釐清的一個具體情境。
+            </p>
+            <div style="display: flex; gap: 15px;">
+                <button id="btn-back-to-mode" class="cast-btn" style="flex: 1; font-size: 1rem; padding: 10px;">返回上一步</button>
+                <button id="confirm-btn" class="cast-btn" style="flex: 1.5; font-size: 1rem; padding: 10px;">靜心確認</button>
+            </div>
+        </div>
+
+        <!-- 步驟三：起卦動畫與操作區 -->
+        <div id="step-cast" class="step-section" style="display: none;">
+            <p id="display-question" class="focused-question"></p>
+            
+            <main class="hexagram-display">
+                <div class="yao"></div> 
+                <div class="yao"></div> 
+                <div class="yao"></div> 
+                <div class="yao"></div> 
+                <div class="yao"></div> 
+                <div class="yao"></div> 
+            </main>
+
+            <div class="info-card">
+                <div class="gua-result-box">
+                    <div class="base-gua">
+                        <h3 class="gua-type">本卦 (現況)</h3>
+                        <h2 class="gua-name" id="base-name">運算中</h2>
+                    </div>
+                    <div class="changed-gua" id="changed-gua-box" style="display: none;">
+                        <h3 class="gua-type">變卦 (發展)</h3>
+                        <h2 class="gua-name" id="changed-name">-</h2>
+                    </div>
+                </div>
+                <div class="gua-desc" id="gua-desc">萬物皆有定數,請靜待啟示...</div>
+            </div>
+
+            <footer id="dynamic-footer">
+                <button id="cast-btn" class="cast-btn" style="display: none;">誠心起卦</button>
+
+                <div id="coin-method-selection" style="display: none; gap: 15px; justify-content: center; align-items: center;">
+                    <button id="btn-manual-coin" class="cast-btn" style="padding: 10px 15px; font-size: 1rem;">自行擲實體硬幣</button>
+                    <button id="btn-auto-coin" class="cast-btn" style="padding: 10px 15px; font-size: 1rem;">電腦誠心代擲</button>
+                </div>
+
+                <div id="manual-toss-controls" style="display: none; flex-direction: column; align-items: center; gap: 15px;">
+                    <div class="coin-guide">
+                        <h4>🪙 實體擲幣指南</h4>
+                        <p>約定硬幣正面為「字」,背面為「人頭」。雙手合十搖晃後擲出：</p>
+                        <ul>
+                            <li><strong>兩頭一字</strong> ➔ 記為 靜態少陰 (- -)</li>
+                            <li><strong>兩字一頭</strong> ➔ 記為 靜態少陽 (—)</li>
+                            <li><strong>三個人頭</strong> ➔ 記為 動態老陰 (x)</li>
+                            <li><strong>三個字</strong> ➔ 記為 動態老陽 (o)</li>
+                        </ul>
+                    </div>
+                    <p id="manual-toss-status" class="mode-hint" style="margin-bottom: 0; color: #b89758; font-weight: 600;">請擲出硬幣,並記錄第 1 爻</p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; max-width: 320px;">
+                        <button id="btn-record-8" class="cast-btn" style="padding: 10px; font-size: 0.95rem;">少陰 (- -)<br><span style="font-size: 0.75rem; opacity: 0.8;">兩頭一字</span></button>
+                        <button id="btn-record-7" class="cast-btn" style="padding: 10px; font-size: 0.95rem;">少陽 (—)<br><span style="font-size: 0.75rem; opacity: 0.8;">兩字一頭</span></button>
+                        <button id="btn-record-6" class="cast-btn changing-btn" style="padding: 10px; font-size: 0.95rem;">老陰 (x) 動<br><span style="font-size: 0.75rem; opacity: 0.8;">三個人頭</span></button>
+                        <button id="btn-record-9" class="cast-btn changing-btn" style="padding: 10px; font-size: 0.95rem;">老陽 (o) 動<br><span style="font-size: 0.75rem; opacity: 0.8;">三個字</span></button>
+                    </div>
+                </div>
+
+                <div id="auto-toss-controls" style="display: none; flex-direction: column; align-items: center; gap: 15px;">
+                    <p id="auto-toss-status" class="mode-hint" style="margin-bottom: 0; color: #b89758; font-weight: 600;">心無旁騖,點擊擲出爻象</p>
+                    <button id="btn-auto-toss" class="cast-btn" style="border-color: #b89758; color: #b89758;">擲 第 1 爻</button>
+                </div>
+
+                <div style="display: flex; gap: 10px; justify-content: center; margin-top: 15px; width: 100%;">
+                    <button id="btn-step-back" class="cast-btn" style="font-size: 1rem; padding: 10px 20px; display: none;">返回上一步</button>
+                    <button id="btn-restart" class="cast-btn" style="font-size: 1rem; padding: 10px 20px; display: none;">再次叩問</button>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <div class="disclaimer-footer">
+        本程式僅提供卦象編碼與提示詞模板,AI 解讀內容由第三方生成,請視為自我反思之輔助,人生抉擇回歸理性。
+    </div>
+
+    <script src="hexagrams.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
