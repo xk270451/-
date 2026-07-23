@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const DAILY_LIMIT = 1; 
     let userEmail = localStorage.getItem('user_email') || '';
     let isVip = localStorage.getItem('is_vip') === 'true';
+    let vipExpireDate = localStorage.getItem('vip_expire_date') || '';
     let devClickCount = 0;
 
     const castBtn = document.getElementById('cast-btn');
@@ -26,6 +27,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnStepBack = document.getElementById('btn-step-back');
     const yaoElements = document.querySelectorAll('.yao');
     const infoCard = document.querySelector('.info-card');
+
+    // --- 檢查 7 天內到期並發送 Email 提醒模擬 ---
+    function checkVipExpirationReminder() {
+        if (!isVip || !vipExpireDate) return;
+        const expireTime = new Date(vipExpireDate).getTime();
+        const currentTime = new Date().getTime();
+        const daysLeft = (expireTime - currentTime) / (1000 * 60 * 60 * 24);
+
+        // 如果剩下不到 7 天且還沒提醒過
+        if (daysLeft > 0 && daysLeft <= 7 && localStorage.getItem('reminder_sent') !== 'true') {
+            const renewalModal = document.getElementById('renewal-modal');
+            const renewalMsg = document.getElementById('renewal-msg');
+            renewalMsg.innerHTML = `親愛的會員 <strong>${userEmail}</strong> 您好：<br><br>您的六爻 VIP 資格將於 <strong>${Math.ceil(daysLeft)} 天後</strong> (${vipExpireDate}) 到期。<br><br>感謝您的支持！系統為您準備了專屬續訂優惠，現在續訂即可享有 <strong>8 折優惠</strong>！`;
+            renewalModal.style.display = 'flex';
+            localStorage.setItem('reminder_sent', 'true');
+        }
+    }
+    checkVipExpirationReminder();
+
+    const renewalModal = document.getElementById('renewal-modal');
+    document.getElementById('btn-close-renewal').addEventListener('click', () => { renewalModal.style.display = 'none'; });
+    document.getElementById('btn-apply-discount').addEventListener('click', () => {
+        renewalModal.style.display = 'none';
+        alert("🎉 8 折優惠碼已套用！");
+        document.getElementById('vip-modal').style.display = 'flex';
+    });
 
     // 更新頂部帳號狀態標籤
     const userStatusTag = document.getElementById('user-status-tag');
@@ -66,7 +93,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function checkDailyLimit() {
         const todayStr = new Date().toISOString().split('T')[0];
         let usage = JSON.parse(localStorage.getItem('daily_usage') || '{"date":"","count":0}');
-        
         if (usage.date !== todayStr) {
             usage = { date: todayStr, count: 0 };
             localStorage.setItem('daily_usage', JSON.stringify(usage));
@@ -126,11 +152,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- VIP 方案訂閱彈窗互動 ---
+    // --- VIP 方案訂閱與綠界/藍新測試金流模擬 ---
     const vipModal = document.getElementById('vip-modal');
     const btnVipUpgrade = document.getElementById('btn-vip-upgrade');
     const btnCloseVip = document.getElementById('btn-close-vip');
-    const btnSimulateBuy = document.getElementById('btn-simulate-buy');
+    const btnEcpayPay = document.getElementById('btn-ecpay-pay');
+    let selectedPlan = 'year';
 
     btnVipUpgrade.addEventListener('click', () => { vipModal.style.display = 'flex'; });
     btnCloseVip.addEventListener('click', () => { vipModal.style.display = 'none'; });
@@ -139,21 +166,38 @@ document.addEventListener('DOMContentLoaded', () => {
         card.addEventListener('click', (e) => {
             document.querySelectorAll('.vip-plan-card').forEach(c => c.classList.remove('selected'));
             e.currentTarget.classList.add('selected');
+            selectedPlan = e.currentTarget.getAttribute('data-plan');
         });
     });
 
-    btnSimulateBuy.addEventListener('click', () => {
+    btnEcpayPay.addEventListener('click', () => {
         if (!userEmail) {
             alert("請先點擊右上角「登入」綁定您的 Email，才能將 VIP 權限對應到您的帳號！");
             vipModal.style.display = 'none';
             loginModal.style.display = 'flex';
             return;
         }
+
+        // 模擬串接綠界 ECPay / 藍新 NewebPay 測試金流跳轉
+        const confirmPay = confirm(`即將引導您前往 【綠界 ECPay / 藍新 NewebPay 測試金流】 進行安全付款。\n方案：[${selectedPlan}] 測試環境訂單，是否確認付款？`);
+        if (!confirmPay) return;
+
+        // 計算到期日
+        const expireDate = new Date();
+        if (selectedPlan === 'day') expireDate.setDate(expireDate.getDate() + 1);
+        else if (selectedPlan === 'month') expireDate.setMonth(expireDate.getMonth() + 1);
+        else if (selectedPlan === 'year') expireDate.setFullYear(expireDate.getFullYear() + 1);
+        else expireDate.setFullYear(expireDate.getFullYear() + 99); // 永久
+
         isVip = true;
+        vipExpireDate = expireDate.toISOString().split('T')[0];
         localStorage.setItem('is_vip', 'true');
+        localStorage.setItem('vip_expire_date', vipExpireDate);
+        localStorage.removeItem('reminder_sent'); // 重置提醒狀態
+
         updateVipUIState();
         vipModal.style.display = 'none';
-        alert(`🎉 帳號 [${userEmail}] 成功升級 VIP！所有進階功能已全面解鎖。`);
+        alert(`💳 綠界金流回調成功！\n🎉 帳號 [${userEmail}] 已成功升級 VIP（效期至：${vipExpireDate}）。`);
     });
 
     // --- 深色模式切換 ---
@@ -566,7 +610,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tossCount++;
 
         if (tossCount < 6) {
-            document.getElementById('manual-toss-status').textContent = `請擲出硬幣,並記錄第 ${tossCount + 1} 爻`;
+            document.getElementById('manual-toss-status').textContent = `請擲出硬幣，並記錄第 ${tossCount + 1} 爻`;
             document.getElementById('btn-auto-toss').textContent = `擲 第 ${tossCount + 1} 爻`;
         } else {
             manualTossControls.style.display = 'none'; autoTossControls.style.display = 'none';
@@ -595,7 +639,7 @@ document.addEventListener('DOMContentLoaded', () => {
             currentTossResults.pop();
 
             if (manualTossControls.style.display === 'flex') {
-                document.getElementById('manual-toss-status').textContent = `已撤回,請重新記錄第 ${tossCount + 1} 爻`;
+                document.getElementById('manual-toss-status').textContent = `已撤回，請重新記錄第 ${tossCount + 1} 爻`;
             } else {
                 document.getElementById('btn-auto-toss').textContent = `擲 第 ${tossCount + 1} 爻`;
             }
@@ -628,7 +672,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnRestart.addEventListener('click', () => {
         tossCount = 0; currentTossResults = []; document.getElementById('user-question').value = '';
         castBtn.disabled = false; castBtn.style.opacity = '1';
-        document.getElementById('manual-toss-status').textContent = `請擲出硬幣,並記錄第 1 爻`; 
+        document.getElementById('manual-toss-status').textContent = `請擲出硬幣，並記錄第 1 爻`; 
         document.getElementById('btn-auto-toss').textContent = `擲 第 1 爻`;
         
         yaoElements.forEach(yao => { yao.className = 'yao'; }); 
