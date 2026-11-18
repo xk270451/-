@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>桃花源無限流</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <style>
+        :root { --accent: #c9a063; --bg: #0d1617; --glass: rgba(255,255,255,0.05); }
+        body { background-color: var(--bg); color: #e0d5b1; font-family: "Microsoft JhengHei", sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; transition: background-color 0.8s ease; }
+
+        header { padding: 15px; text-align: center; border-bottom: 1px solid rgba(201,160,99,0.3); background: rgba(0,0,0,0.8); z-index: 100; position: relative;}
+        h1 { margin: 0; color: var(--accent); letter-spacing: 8px; font-weight: 300; font-size: 1.5em; transition: 0.3s; }
+        
+        #game-toggle-btn { position: absolute; right: 20px; top: 15px; background: rgba(201,160,99,0.1); border: 1px solid var(--accent); color: var(--accent); padding: 8px 15px; border-radius: 20px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        #game-toggle-btn:hover { background: var(--accent); color: var(--bg); }
+
+        #mute-btn { position: absolute; left: 20px; top: 15px; background: transparent; border: 1px solid var(--accent); color: var(--accent); padding: 8px 15px; border-radius: 20px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        #mute-btn:hover { background: var(--accent); color: var(--bg); }
+
+        #fx-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 90; overflow: hidden; }
+        #defeat-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.95) url('defeat.png') no-repeat center center; background-size: cover; z-index: 9998; display: none; pointer-events: all; }
+
+        #danger-border-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9990; display: none;
+            box-shadow: inset 0 0 100px rgba(255, 0, 0, 0.9), inset 0 0 30px rgba(255, 0, 0, 0.8); animation: danger-flash 0.5s infinite;
+        }
+        @keyframes danger-flash { 0% { opacity: 0.3; } 50% { opacity: 1; } 100% { opacity: 0.3; } }
+
+        #timer-hud {
+            position: absolute; top: 20px; left: 20px; background: rgba(20, 0, 0, 0.85); border: 2px solid #ff4d4d;
+            color: #ff4d4d; padding: 10px 20px; border-radius: 8px; font-size: 2em; font-weight: bold; font-family: monospace; letter-spacing: 2px;
+            z-index: 1000; display: none; text-shadow: 0 0 10px #ff4d4d; box-shadow: 0 0 20px rgba(255, 77, 77, 0.5); backdrop-filter: blur(3px); transform-origin: left top;
+        }
+        .timer-warning { animation: timer-pulse 0.25s infinite !important; color: #ff0000 !important; border-color: #ff0000 !important; }
+        @keyframes timer-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); box-shadow: 0 0 40px #ff0000; } 100% { transform: scale(1); } }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10, 0, 0, 0.85); backdrop-filter: blur(8px); z-index: 9999; display: none; align-items: center; justify-content: center; }
+        .modal-content { border-radius: 10px; padding: 40px; text-align: center; width: 80%; max-width: 450px; animation: pulse 2s infinite; transition: 0.3s; }
+        .modal-title { font-size: 1.8em; font-weight: bold; margin-bottom: 20px; letter-spacing: 3px; }
+        .modal-text { color: #f0f0f0; font-size: 1.2em; line-height: 1.8; margin-bottom: 30px; letter-spacing: 1px;}
+        .modal-btn { padding: 12px 30px; cursor: pointer; border-radius: 5px; font-weight: bold; font-size: 1.1em; transition: 0.3s; letter-spacing: 2px; border: 1px solid; background: transparent;}
+        
+        .modal-content.start { background: #05101a; border: 2px solid #3399ff; box-shadow: 0 0 40px rgba(51, 153, 255, 0.5); }
+        .modal-content.start .modal-title { color: #3399ff; }
+        .modal-content.start .modal-btn { color: #3399ff; border-color: #3399ff; background: rgba(51, 153, 255, 0.1); }
+        .modal-content.start .modal-btn:hover { background: #3399ff; color: #fff; box-shadow: 0 0 15px #3399ff;}
+
+        .modal-content.warning { background: #1a0505; border: 2px solid #ff4d4d; box-shadow: 0 0 40px rgba(255, 77, 77, 0.5); }
+        .modal-content.warning .modal-title { color: #ff4d4d; }
+        .modal-content.warning .modal-btn { color: #ff4d4d; border-color: #ff4d4d; background: rgba(255, 77, 77, 0.1); }
+        .modal-content.warning .modal-btn:hover { background: #ff4d4d; color: #fff; box-shadow: 0 0 15px #ff4d4d;}
+
+        .modal-content.danger { background: rgba(20,0,0,0.95); border: 2px solid #ff0000; box-shadow: 0 0 60px rgba(255, 0, 0, 0.8); }
+        .modal-content.danger .modal-title { color: #ff0000; }
+
+        .modal-content.rebirth { background: #051a1a; border: 2px solid #00ffcc; box-shadow: 0 0 40px rgba(0, 255, 204, 0.5); }
+        .modal-content.rebirth .modal-title { color: #00ffcc; }
+        .modal-content.rebirth .modal-btn { color: #00ffcc; border-color: #00ffcc; background: rgba(0, 255, 204, 0.1); }
+        .modal-content.rebirth .modal-btn:hover { background: #00ffcc; color: #000; box-shadow: 0 0 15px #00ffcc;}
+
+        .modal-content.success { background: var(--bg); border: 2px solid var(--accent); box-shadow: 0 0 40px rgba(201,160,99,0.5); }
+        .modal-content.success .modal-title { color: var(--accent); }
+        .modal-content.success .modal-btn { color: var(--accent); border-color: var(--accent); background: rgba(201,160,99,0.1); }
+        .modal-content.success .modal-btn:hover { background: var(--accent); color: var(--bg); box-shadow: 0 0 15px var(--accent);}
+        
+        @keyframes pulse { 0% { opacity: 0.9; } 50% { opacity: 1; transform: scale(1.02); } 100% { opacity: 0.9; } }
+
+        .timeline-container { position: relative; background: rgba(0,0,0,0.9); padding: 25px 15%; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--accent); z-index: 100; }
+        .timeline-track { position: absolute; top: 50%; left: 18%; right: 18%; height: 2px; background: rgba(201,160,99,0.3); z-index: 1; transform: translateY(-50%); }
+        .timeline-point { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; cursor: pointer; width: 120px; transition: 0.3s; }
+        .timeline-point .dot { width: 16px; height: 16px; background: var(--bg); border: 2px solid rgba(201,160,99,0.5); border-radius: 50%; margin-bottom: 10px; transition: 0.3s; }
+        .timeline-point .label { color: #8a7d5e; font-size: 0.9em; letter-spacing: 1px; transition: 0.3s; }
+        .timeline-point.active .dot { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 15px var(--accent); }
+        .timeline-point.active .label { color: var(--accent); font-weight: bold; text-shadow: 0 0 10px rgba(201,160,99,0.5); }
+
+        .main { display: flex; flex: 1; padding: 20px; gap: 20px; overflow: hidden; z-index: 60; }
+        .map-wrapper { flex: 2; position: relative; border-radius: 15px; overflow: hidden; border: 2px solid var(--accent); }
+        #map { width: 100%; height: 100%; transition: filter 0.8s ease; }
+        #vignette { position: absolute; top: 0; left: 0; width: 100%; height: 100%; box-shadow: inset 0 0 100px rgba(0,0,0,0.8); pointer-events: none; transition: opacity 0.8s; z-index: 10; opacity: 0; }
+
+        .info-panel { flex: 1; background: var(--glass); border-radius: 15px; border: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; overflow: hidden; backdrop-filter: blur(5px); z-index: 80; position: relative;}
+        
+        #normal-mode-area { display: flex; flex-direction: column; height: 100%; width: 100%; }
+        .scroll-area { padding: 15px; overflow-y: auto; flex: 1; }
+        .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;}
+        .category-title { color: #8a7d5e; font-size: 0.85em; margin: 15px 0 8px 5px; letter-spacing: 2px; font-weight: bold;}
+        .loc-btn { display: block; width: 100%; padding: 12px; margin-bottom: 8px; background: rgba(201, 160, 99, 0.05); border: 1px solid rgba(201, 160, 99, 0.4); color: var(--accent); cursor: pointer; border-radius: 5px; text-align: left; transition: 0.2s; font-size: 0.95em; }
+        .loc-btn:hover { background: rgba(201, 160, 99, 0.2); border-color: var(--accent); }
+
+        .detail-view { padding: 15px 25px 25px 25px; background: rgba(0,0,0,0.8); border-top: 2px solid var(--accent); display: none; }
+        .tab-group { display: flex; gap: 15px; margin-bottom: 15px; }
+        .tab-btn { background: none; border: 1px solid var(--accent); color: var(--accent); padding: 6px 15px; cursor: pointer; border-radius: 4px; font-size: 0.95em; opacity: 0.5; transition: 0.2s; }
+        .tab-btn.active { opacity: 1; background: var(--accent); color: var(--bg); font-weight: bold; }
+        #detail-content { font-size: 1.05em; line-height: 1.8; color: #f0f0f0; margin-top: 15px; }
+        .quote { font-style: italic; border-left: 3px solid var(--accent); padding-left: 12px; margin: 8px 0; }
+        .speaker { color: var(--accent); font-weight: bold; font-size: 1em; display: block; margin-bottom: 5px;}
+
+        #game-mode-area { display: none; padding: 20px; flex-direction: column; height: 100%; background: rgba(0,0,0,0.8); overflow-y: auto;}
+        #game-menu { display: flex; flex-direction: column; gap: 15px; align-items: center; margin-top: 20px;}
+        .game-card { width: 90%; background: rgba(201,160,99,0.1); border: 1px solid var(--accent); border-radius: 10px; padding: 20px; cursor: pointer; transition: 0.3s; text-align: center;}
+        .game-card:hover { background: rgba(201,160,99,0.3); transform: translateY(-5px); }
+        .game-title { color: var(--accent); font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+        .game-desc { font-size: 0.9em; color: #ccc; }
+
+        #game-play { display: none; flex-direction: column; align-items: center; width: 100%; }
+        .level-badge { background: var(--accent); color: var(--bg); padding: 5px 15px; border-radius: 15px; font-weight: bold; margin-bottom: 15px; }
+        .mission-box { background: rgba(255,255,255,0.05); border: 2px dashed var(--accent); padding: 20px; border-radius: 10px; width: 90%; text-align: center; margin-bottom: 20px;}
+        .option-btn { width: 90%; background: transparent; border: 1px solid #8a7d5e; color: #e0d5b1; padding: 12px; margin-bottom: 10px; border-radius: 5px; cursor: pointer; transition: 0.2s; text-align: left; line-height: 1.4;}
+        .option-btn:hover { border-color: var(--accent); background: rgba(201, 160, 99, 0.2); }
+        #game-feedback { font-size: 1.1em; font-weight: bold; height: 30px; margin-top: 10px; }
+        .back-btn { background: transparent; border: none; color: #8a7d5e; cursor: pointer; text-decoration: underline; margin-top: 20px; font-size: 0.9em;}
+        .back-btn:hover { color: var(--accent); }
+
+        @keyframes fall-rain { 0% { transform: translateY(-5vh) translateX(0); opacity: 0.8; } 100% { transform: translateY(105vh) translateX(-10vw); opacity: 0.2; } }
+        @keyframes fall-petal { 0% { transform: translateY(-5vh) rotate(0deg); opacity: 1; } 100% { transform: translateY(105vh) rotate(360deg); opacity: 0; } }
+        .particle { position: absolute; }
+        .leaflet-interactive { cursor: pointer !important; }
+    </style>
+</head>
+<body>
+
+<div id="danger-border-overlay"></div>
+<div id="defeat-overlay"></div>
+
+<div id="system-modal" class="modal-overlay">
+    <div class="modal-content" id="modal-content-box">
+        <div class="modal-title" id="modal-title">系統提示</div>
+        <div class="modal-text" id="modal-msg"></div>
+        <button class="modal-btn" id="modal-btn">確認</button>
+    </div>
+</div>
+
+<div id="fx-container"></div>
+
+<header>
+    <button id="mute-btn" onclick="toggleMute()">🔊 音樂開啟</button>
+    <h1 id="main-header-title">劇境導覽</h1>
+    <button id="game-toggle-btn" onclick="toggleMode()">🎮 進入記憶尋寶</button>
+</header>
+
+<div class="timeline-container">
+    <div class="timeline-track"></div>
+    <div class="timeline-point" id="pt-anlian" onclick="setMode('anlian')">
+        <div class="dot"></div><div class="label">🌧️ 暗戀上海</div>
+    </div>
+    <div class="timeline-point active" id="pt-intersect" onclick="setMode('intersect')">
+        <div class="dot"></div><div class="label">🎭 現代現實</div>
+    </div>
+    <div class="timeline-point" id="pt-taohua" onclick="setMode('taohua')">
+        <div class="dot"></div><div class="label">🌸 繽紛武陵</div>
+    </div>
+</div>
+
+<div class="main">
+    <div class="map-wrapper">
+        <div id="timer-hud">⏳ <span id="time-left">10.00</span></div>
+        <div id="map"></div>
+        <div id="vignette"></div>
+    </div>
+    
+    <div class="info-panel">
+        <div id="normal-mode-area">
+            <div class="scroll-area">
+                <div class="list-header">
+                    <h3 style="color:var(--accent); margin:0; font-size: 1.2em;">探索場景</h3>
+                    <button class="tab-btn active" style="margin:0; padding: 4px 15px; font-size: 0.85em;" onclick="showAll()">[ 全部 ]</button>
+                </div>
+                <div id="location-list"></div>
+            </div>
+            <div id="detail-section" class="detail-view">
+                <div class="tab-group" id="tab-group">
+                    <button id="btn-line" class="tab-btn active" onclick="switchTab('line')">人物台詞</button>
+                    <button id="btn-hist" class="tab-btn" onclick="switchTab('hist')">書中場景</button>
+                    <button id="btn-real-hist" class="tab-btn" onclick="switchTab('real-hist')">地點歷史</button>
+                </div>
+                <h3 id="detail-title" style="color:var(--accent); margin:10px 0 0 0; font-size: 1.3em;"></h3>
+                <div id="detail-content"></div>
+            </div>
+        </div>
+
+        <div id="game-mode-area">
+            <div id="game-menu">
+                <h2 style="color:var(--accent); margin:0;">🗺️ 時空記憶尋寶</h2>
+                <p style="opacity:0.8; font-size:0.9em; margin-bottom: 10px;">請選擇你要挑戰的解謎模組：</p>
+                <div class="game-card" onclick="startGame(1)"><div class="game-title">📍 任務一：坐標尋寶</div><div class="game-desc">在地圖上盲猜出正確的地理坐標。</div></div>
+                <div class="game-card" onclick="startGame(2)"><div class="game-title">💬 任務二：台詞配對</div><div class="game-desc">選出屬於該時空的經典台詞。</div></div>
+                <div class="game-card" onclick="startGame(3)"><div class="game-title">👁️ 任務三：心理深潛</div><div class="game-desc">透過空間氛圍，解析殘留的情感本質。</div></div>
+            </div>
+
+            <div id="game-play">
+                <div class="level-badge" id="level-badge">關卡 1 / 5</div>
+                <div class="mission-box">
+                    <div style="color:var(--accent); font-weight:bold; margin-bottom:10px;">[ 系統提示 ]</div>
+                    <div id="mission-text">載入中...</div>
+                </div>
+                <div id="options-container" style="width:100%; display:none; flex-direction:column; align-items:center;"></div>
+                <div id="game-feedback"></div>
+                <button class="back-btn" onclick="backToMenu()">🔙 放棄任務，返回目錄</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+    var map = L.map('map', {zoomControl: false}).setView([24.5, 121], 7);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri' }).addTo(map);
+
+    const audioTracks = {
+        anlian: new Audio('audio/anlian.mp3'),
+        intersect: new Audio('audio/intersect.mp3'),
+        taohua: new Audio('audio/taohua.mp3'),
+        task1: new Audio('audio/task1.mp3'),
+        task2: new Audio('audio/task2.mp3'),
+        task3: new Audio('audio/task3.mp3'),
+        alarm: new Audio('audio/alarm.mp3') 
+    };
+
+    for (let key in audioTracks) { audioTracks[key].loop = true; audioTracks[key].volume = 0.5; }
+    let currentBgmKey = null; let currentBgmObj = null; let isMuted = false;
+
+    function toggleMute() {
+        isMuted = !isMuted;
+        document.getElementById('mute-btn').innerText = isMuted ? '🔇 音樂關閉' : '🔊 音樂開啟';
+        if (currentBgmObj) currentBgmObj.muted = isMuted;
+        if (audioTracks.alarm) audioTracks.alarm.muted = isMuted;
+        if (!isMuted && currentBgmObj && currentBgmObj.paused) currentBgmObj.play().catch(e => console.log("等待互動"));
+    }
+
+    function manageBgm() {
+        let targetTrack = 'intersect'; 
+        if (!isGameMode) {
+            targetTrack = currentThemeMode || 'intersect';
+        } else {
+            if (activeGame === 1) targetTrack = 'task1';
+            else if (activeGame === 2) targetTrack = 'task2';
+            else if (activeGame === 3) targetTrack = 'task3';
+            else targetTrack = 'intersect'; 
+        }
+
+        if (currentBgmKey === targetTrack) {
+            if (currentBgmObj && currentBgmObj.paused && !isMuted) {
+                currentBgmObj.play().catch(()=>{});
+            }
+            return;
+        }
+        
+        if (currentBgmObj) {
+            currentBgmObj.pause();
+            currentBgmObj.currentTime = 0;
+        }
+
+        currentBgmKey = targetTrack;
+        currentBgmObj = audioTracks[targetTrack];
+        
+        if (currentBgmObj) {
+            currentBgmObj.muted = isMuted;
+            currentBgmObj.play().catch(() => {});
+        }
+    }
+
+    document.body.addEventListener('click', () => {
+        if (!isMuted && currentBgmObj && currentBgmObj.paused) {
+            currentBgmObj.play().catch(e => {});
+        }
+    }, { once: true });
+
+
+    const fxContainer = document.getElementById('fx-container');
+    const mapElement = document.getElementById('map');
+    const vignette = document.getElementById('vignette');
+    const locationList = document.getElementById('location-list');
+
+    const db = {
+        shanghai_bund: { mode: 'anlian', title: "上海 | 黃浦灘邊", coords: [31.2335, 121.4925], speaker: "雲之凡", inBook: true, line: "「好安靜啊，從來沒見過這麼安靜的上海。」", hist: "劇中設定為1940年代戰後，江濱柳與雲之凡在此盪鞦韆，是兩人相戀與最終分離的起點。", realHist: "外灘見證了十里洋場的繁華與滄桑。如今則是上海最重要的金融與觀光地標。" },
+        ximending: { mode: 'anlian', title: "台北 | 西門町舊巷", coords: [25.0421, 121.5065], speaker: "江濱柳", inBook: true, line: "「這些年，你有沒有想過我？」", hist: "劇中江濱柳來到台灣後，在台北老街區的茫茫人海中，持續尋找雲之凡的遺憾之地。", realHist: "戰後成為全台最繁華的電影與流行文化中心。至今依然是年輕人與次文化的聚集地。" },
+        taipei_theater: { mode: 'intersect', title: "台北 | 國家戲劇院", coords: [25.0358, 121.5187], speaker: "舞台監督", inBook: true, line: "「兩邊都不准動，就這樣定格！」", hist: "兩個劇團因場地協調出錯，被迫在同一個舞台上進行排練，引發荒謬交鋒。", realHist: "1987年落成，是台灣最具代表性的國家級表演藝術中心。" },
+        wuling: { mode: 'taohua', title: "湖南 | 武陵源溪", coords: [29.0400, 109.8300], speaker: "老陶", inBook: true, line: "「在那種地方，連空氣都是甜的。」", hist: "漁人老陶為了逃避殘酷現實，沿溪而上誤入的世外桃源。", realHist: "位於湖南，以奇特的石英砂岩峰林地貌著稱。如夢似幻的景色常被視為現實版的桃花源。" }
+    };
+
+    var markersLayer = L.layerGroup().addTo(map);
+
+    function initMapMarkers(showNames = true) {
+        markersLayer.clearLayers();
+        for (const [key, data] of Object.entries(db)) {
+            let marker = L.marker(data.coords);
+            if (showNames) marker.bindTooltip(data.title);
+            marker.on('click', () => handleLocationClick(key)); 
+            markersLayer.addLayer(marker);
+        }
+    }
+
+    function createParticles(type, count) {
+        fxContainer.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+            const p = document.createElement('div'); p.className = 'particle'; p.style.left = Math.random() * 110 - 10 + 'vw';
+            if (type === 'rain') { p.style.width = '1.5px'; p.style.height = Math.random() * 30 + 20 + 'px'; p.style.background = 'rgba(150, 180, 220, 0.7)'; p.style.animation = `fall-rain ${Math.random() * 0.8 + 0.4}s linear infinite`; } 
+            else if (type === 'petal') { const size = Math.random() * 12 + 6; p.style.width = size + 'px'; p.style.height = size + 'px'; p.style.background = '#ffb3c6'; p.style.borderRadius = '50% 0 50% 50%'; p.style.filter = 'blur(1px)'; p.style.animation = `fall-petal ${Math.random() * 3 + 2.5}s linear infinite`; }
+            fxContainer.appendChild(p);
+        }
+    }
+
+    let currentThemeMode = '';
+    function applyTheme(mode) {
+        if (currentThemeMode === mode) return; currentThemeMode = mode;
+        document.getElementById('pt-anlian').classList.remove('active'); document.getElementById('pt-intersect').classList.remove('active'); document.getElementById('pt-taohua').classList.remove('active');
+        if(mode) document.getElementById(`pt-${mode}`).classList.add('active');
+
+        if (mode === 'anlian') { vignette.style.opacity = 0.8; mapElement.style.filter = 'grayscale(1) brightness(0.7)'; document.body.style.backgroundColor = '#0a1114'; createParticles('rain', 60); } 
+        else if (mode === 'taohua') { vignette.style.opacity = 0; mapElement.style.filter = 'sepia(0.2) brightness(0.9) saturate(1.1)'; document.body.style.backgroundColor = '#1a140d'; createParticles('petal', 30); } 
+        else { vignette.style.opacity = 0; mapElement.style.filter = 'none'; document.body.style.backgroundColor = '#0d1617'; fxContainer.innerHTML = ''; }
+        manageBgm(); 
+    }
+
+    let isGameMode = false;
+    let activeGame = 0; 
+    let currentLevel = 0;
+    let errorCount = 0; 
+    let systemTimerId = null;
+    let currentGameData = []; 
+    let gameClockId = null;
+    let endTime = 0;
+
+    let activePools = { 1: [], 2: [], 3: [] };
+
+    const gameDataPool = {
+        1: [
+            { target: 'shanghai_bund', hint: "1940年代江濱柳與雲之凡並肩盪鞦韆的定情地。" },
+            { target: 'taipei_theater', hint: "劇團排練時，導演崩潰大喊「兩邊都不准動」的荒謬舞台。" },
+            { target: 'wuling', hint: "漁人老陶為逃避妻子背叛，溯溪而上誤入的世外桃源。" },
+            { target: 'ximending', hint: "江濱柳來到台灣後，在茫茫人海中持續尋找雲之凡的老街區。" },
+            { target: 'shanghai_bund', hint: "見證了十里洋場的繁華與滄桑，同時也是《暗戀》悲劇的起點。" },
+            { target: 'taipei_theater', hint: "現代藝術與歷史悲喜劇交會，雙方爭奪主導權的殿堂。" },
+            { target: 'wuling', hint: "那個「連空氣都是甜的」，讓人忘卻現實痛苦的理想鄉。" },
+            { target: 'ximending', hint: "戰後成為全台最繁華，且承載了無數尋人遺憾的娛樂町。" },
+            { target: 'shanghai_bund', hint: "江濱柳晚年躺在病床上，回憶中最難以忘懷的江畔夜景。" },
+            { target: 'taipei_theater', hint: "燈光師無奈打光，兩個劇組被迫共用空間的排練場。" },
+            { target: 'wuling', hint: "離開後再也找不到標記的傳說秘境。" },
+            { target: 'ximending', hint: "登報尋找初戀，留下「雲之凡，我是江濱柳」聯絡地址的所在。" },
+            { target: 'shanghai_bund', hint: "雲之凡感嘆「從來沒見過這麼安靜」的那個歷史坐標。" },
+            { target: 'taipei_theater', hint: "《暗戀》與《桃花源》進行著錯亂物理交疊的元舞台。" },
+            { target: 'wuling', hint: "穿白衣的陌生男女，告訴老陶「放輕鬆」的虛幻仙境。" }
+        ],
+        2: [
+            { loc: 'ximending', hint: "在西門町舊巷中，江濱柳那句跨越四十年的心碎問候是？", ans: "「這些年，你有沒有想過我？」", distractors: ["「這些年，你過得好嗎？」", "「我一直在這裡等你，等到頭髮都白了。」"] },
+            { loc: 'shanghai_bund', hint: "1940年的上海夜裡，雲之凡留下的感嘆是？", ans: "「好安靜啊，從來沒見過這麼安靜的上海。」", distractors: ["「好安靜啊，我們在鞦韆上盪到了天亮。」", "「這上海的夜，安靜得讓人害怕。」"] },
+            { loc: 'taipei_theater', hint: "國家戲劇院內，舞台監督面對失控局面時崩潰大喊了什麼？", ans: "「兩邊都不准動，就這樣定格！」", distractors: ["「這一場戲，是我們共享的舞台。」", "「時間到，馬上給我清空舞台！」"] },
+            { loc: 'wuling', hint: "置身武陵源，老陶對這個無憂無慮的地方有何評價？", ans: "「在那種地方，連空氣都是甜的。」", distractors: ["「放輕鬆，把心放輕鬆，連水都是甜的。」", "「這才是我們真正該去的地方。」"] },
+            { loc: 'shanghai_bund', hint: "離別前夕的黃浦灘邊，什麼樣的話語最令人心碎？", ans: "「我們這是在逃難，不是在散步！」", distractors: ["「我一定會回來找妳的。」", "「這座城市，是不是要變天了？」"] },
+            { loc: 'wuling', hint: "遇到長得像春花的白袍女子時，她說了什麼來安撫老陶？", ans: "「放輕鬆，把心放輕鬆。」", distractors: ["「忘記過去，把痛苦都忘記。」", "「既來之，則安之。」"] },
+            { loc: 'taipei_theater', hint: "《暗戀》導演對燈光不滿時，他大聲要求的是什麼感覺？", ans: "「我要的是一個安靜的，沒有人干擾的上海！」", distractors: ["「我要的是那種戰火紛飛前的寧靜！」", "「我要的是你們給我專心演戲！」"] },
+            { loc: 'ximending', hint: "四十年後的病房重逢，江濱柳說出的第一句話是？", ans: "「妳... 這些年，過得好嗎？」", distractors: ["「之凡，真的是妳嗎？」", "「我終於等到妳了...」"] },
+            { loc: 'taipei_theater', hint: "兩團爭執時，最常出現的荒謬對話台詞是？", ans: "「我們是《暗戀》，你們是《桃花源》，這怎麼能同台？」", distractors: ["「兩邊各退一步，先演暗戀！」", "「所有人退下，讓桃花源先走！」"] },
+            { loc: 'wuling', hint: "老陶在桃花源中，對這裡的存在感到疑惑時的台詞？", ans: "「武陵？這裡沒有武陵，這裡只有我們。」", distractors: ["「這裡到底是天堂，還是地獄？」", "「我是誰？我為什麼會來到這裡？」"] },
+            { loc: 'shanghai_bund', hint: "離別前夕的擔憂，雲之凡曾說過什麼？", ans: "「這一別，不知道什麼時候才能再見面。」", distractors: ["「等戰爭結束了，我們就一起去重慶。」", "「你一定要記得我的樣子。」"] },
+            { loc: 'ximending', hint: "面對無盡的尋覓，江濱柳在報紙尋人啟事上留下的文字是？", ans: "「雲之凡，我是江濱柳...」", distractors: ["「雲之凡，妳還在台北嗎？」", "「之凡，我一直在這裡等妳。」"] },
+            { loc: 'taipei_theater', hint: "燈光師面對兩個導演的輪番指責，無奈的回應是？", ans: "「導演，這燈光只能打成這樣了！」", distractors: ["「順子！把燈打亮！」", "「這設備壞了，我沒辦法！」"] },
+            { loc: 'ximending', hint: "在漫長的四十年尋覓中，哪句話最能代表江濱柳在台北的絕望？", ans: "「這不可能，台北這麼大，我怎麼可能找不到她？」", distractors: ["「如果有緣，我們一定會再見。」", "「我把青春都留在了那個夜晚。」"] },
+            { loc: 'shanghai_bund', hint: "雲之凡回憶起當年的約會，她是如何形容那晚的？", ans: "「好大的一個上海，好像就剩下我們兩個人。」", distractors: ["「上海這麼大，我卻只看見你一個。」", "「那晚的上海，安靜得只聽得見我們的心跳。」"] }
+        ],
+        3: [
+            { theme: 'anlian', hint: "灰暗的色調與冰冷的雨絲吞噬了地圖，這股強烈的視覺壓迫感暗示著哪種心境？", ansText: "大時代下被迫分離的無奈與憂鬱", distractors: ["對理想烏托邦的狂熱追求與幻滅", "現實與戲劇交錯的荒謬與混亂"] },
+            { theme: 'taohua', hint: "空間呈現暖金光澤與落英繽紛，系統解析出此處的心理狀態為？", ansText: "逃避現實苦痛後的短暫解脫與狂喜", distractors: ["在茫茫人海中尋人不遇的絕望感", "大時代戰亂帶來的撕裂與哀愁"] },
+            { theme: 'intersect', hint: "所有濾鏡被強制剝離，空間回歸絕對的冷靜與寫實。這裡正在發生什麼？", ansText: "劇本與現實碰撞的荒謬排練場", distractors: ["跨越四十年的世紀悲劇重逢", "記憶中無法抹去的上海外灘"] },
+            { theme: 'anlian', hint: "周遭瀰漫著繁華卻空洞的氛圍，時間彷彿停滯在戰後的某個夜晚。", ansText: "對未知未來與離別的極大恐懼", distractors: ["逃離喧囂後的平靜與安詳", "大夢初醒後的理智與抽離"] },
+            { theme: 'intersect', hint: "兩個完全無關的群體被迫在同一處尋找平衡，充滿了爭執與妥協。", ansText: "資源匱乏下的焦慮與集體歇斯底里", distractors: ["在桃花源中樂不思蜀的忘我境界", "欣賞大自然與藝術對話的平靜"] },
+            { theme: 'taohua', hint: "色彩雖然溫暖，但看似完美的背後卻隱藏著虛幻，彷彿一觸即碎。", ansText: "拒絕面對背叛創傷的極端心理防禦", distractors: ["對世外桃源的不真實感與懷懷", "兩劇團互不相讓的焦慮與煩躁"] },
+            { theme: 'anlian', hint: "失去色彩的黑白世界，伴隨著滴答作響的雨聲，這對應了什麼情感？", ansText: "無法重逢的絕望與時光停滯的孤獨", distractors: ["試圖掌控混亂局面的強迫症", "對大自然鬼斧神工的純粹讚嘆"] },
+            { theme: 'taohua', hint: "花瓣無止盡地飄落，這種過度飽和的夢幻感，象徵著什麼防禦機制？", ansText: "對完美烏托邦的沉溺與自我催眠", distractors: ["對逝去愛情的過度美化與執念", "刻意營造喜劇效果的舞台設計"] },
+            { theme: 'intersect', hint: "毫無特效干擾的清晰視野，打破了第四面牆的幻覺。這種冷靜代表了？", ansText: "後設劇場：提醒觀眾這只是一場戲的抽離", distractors: ["時空交疊：上海與武陵源的物理融合", "記憶回溯：江濱柳最清醒的時刻"] },
+            { theme: 'anlian', hint: "被水氣與陰影籠罩的地圖邊緣，這種視線受阻的狀態，暗示了什麼處境？", ansText: "在動盪時代中無法掌握命運的渺小無力", distractors: ["在桃花源中迷失方向的困惑", "在劇院停電時的慌亂與無助"] },
+            { theme: 'anlian', hint: "極致安靜卻充滿壓迫感的空氣，這代表了哪種難以言喻的狀態？", ansText: "面對龐大歷史洪流的窒息感", distractors: ["對自我創作價值的懷疑與探尋", "大時代戰亂帶來的撕裂與哀愁"] },
+            { theme: 'taohua', hint: "甜膩到幾乎失去真實感的空氣，這是為了掩蓋什麼潛意識？", ansText: "為了掩蓋內心深處自卑與憤怒的虛假幻境", distractors: ["為了掩飾兩個劇團互不相讓的焦慮", "對理想烏托邦的狂熱追求與幻滅"] },
+            { theme: 'intersect', hint: "無論如何都無法融合的生硬燈光，象徵了現代人的何種悲哀？", ansText: "現代人無法溝通、各自為政的疏離感", distractors: ["困在回憶中拒絕走向未來的執念", "試圖在失控人生中強行奪回主導權的妄想"] },
+            { theme: 'anlian', hint: "鞦韆來回擺盪卻沒有前進的錯覺，這象徵了劇中人的何種執念？", ansText: "困在回憶中拒絕走向未來的執念", distractors: ["逃避現實苦痛後的短暫解脫與狂喜", "在茫茫人海中尋人不遇的絕望感"] },
+            { theme: 'intersect', hint: "所有人突然在混亂中定格的瞬間，透露出何種潛意識渴望？", ansText: "試圖在失控人生中強行奪回主導權的妄想", distractors: ["對逝去愛情的過度美化與執念", "大時代下被迫分離的無奈與憂鬱"] }
+        ]
+    };
+
+    function initPool(gameType) {
+        let rawPool = [...gameDataPool[gameType]].sort(() => Math.random() - 0.5);
+        
+        if (gameType === 1) {
+            for(let i=0; i<rawPool.length-1; i++) {
+                if(rawPool[i].target === rawPool[i+1].target) {
+                    for(let j=i+2; j<rawPool.length; j++) {
+                        if(rawPool[j].target !== rawPool[i].target) {
+                            let temp = rawPool[i+1];
+                            rawPool[i+1] = rawPool[j];
+                            rawPool[j] = temp;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        activePools[gameType] = rawPool;
+    }
+
+    function generateDynamicGameData(gameType) {
+        if (activePools[gameType].length < 5) {
+            initPool(gameType);
+        }
+
+        let selected = activePools[gameType].splice(0, 5); 
+        
+        currentGameData = selected.map((q, index) => {
+            let levelData = {};
+            if (gameType === 1) {
+                levelData = { target: q.target, hint: `【第 ${index + 1} 關】${q.hint}` };
+            } else if (gameType === 2) {
+                let options = [q.ans, ...q.distractors].sort(() => Math.random() - 0.5);
+                levelData = { loc: q.loc, hint: `【第 ${index + 1} 關】${q.hint}`, options: options, ans: options.indexOf(q.ans) };
+            } else if (gameType === 3) {
+                let options = [q.ansText, ...q.distractors].sort(() => Math.random() - 0.5);
+                levelData = { theme: q.theme, hint: `【第 ${index + 1} 關】${q.hint}`, options: options, ans: options.indexOf(q.ansText) };
+            }
+            return levelData;
+        });
+    }
+
+    function startGameTimer() {
+        clearInterval(gameClockId);
+        let duration = 10000;
+        endTime = Date.now() + duration;
+        const hud = document.getElementById('timer-hud');
+        const timeSpan = document.getElementById('time-left');
+        const dangerBorder = document.getElementById('danger-border-overlay');
+        
+        hud.style.display = 'block';
+        hud.classList.remove('timer-warning');
+        dangerBorder.style.display = 'none';
+
+        gameClockId = setInterval(() => {
+            let remaining = endTime - Date.now();
+            if (remaining <= 5000 && remaining > 0) {
+                hud.classList.add('timer-warning');
+                dangerBorder.style.display = 'block';
+            }
+            if (remaining <= 0) {
+                remaining = 0; clearInterval(gameClockId); dangerBorder.style.display = 'none'; timeSpan.innerText = "00.00";
+                triggerError(true); 
+            } else {
+                let seconds = Math.floor(remaining / 1000); let milliseconds = Math.floor((remaining % 1000) / 10);
+                timeSpan.innerText = `${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}`;
+            }
+        }, 10);
+    }
+
+    function stopGameTimer() {
+        clearInterval(gameClockId);
+        document.getElementById('timer-hud').style.display = 'none';
+        document.getElementById('danger-border-overlay').style.display = 'none';
+    }
+
+    function toggleMode() {
+        isGameMode = !isGameMode;
+        const btn = document.getElementById('game-toggle-btn');
+        const mainTitle = document.querySelector('h1');
+        if (isGameMode) {
+            document.getElementById('normal-mode-area').style.display = 'none'; 
+            document.getElementById('game-mode-area').style.display = 'flex';
+            btn.innerText = '✖️ 退出系統'; 
+            btn.style.background = 'var(--accent)'; 
+            btn.style.color = 'var(--bg)';
+            mainTitle.innerText = '記憶尋寶';
+            initMapMarkers(false); 
+            backToMenu();
+        } else {
+            document.getElementById('normal-mode-area').style.display = 'flex'; 
+            document.getElementById('game-mode-area').style.display = 'none';
+            btn.innerText = '🎮 進入記憶尋寶'; 
+            btn.style.background = 'rgba(201,160,99,0.1)'; 
+            btn.style.color = 'var(--accent)';
+            mainTitle.innerText = '劇境導覽';
+            activeGame = 0; 
+            initMapMarkers(true); 
+            errorCount = 0; 
+            activePools = { 1: [], 2: [], 3: [] };
+            setMode('intersect'); 
+            stopGameTimer();
+            if (audioTracks.alarm) audioTracks.alarm.pause(); 
+        }
+    }
+
+    function backToMenu() {
+        activeGame = 0;
+        document.getElementById('game-menu').style.display = 'flex'; document.getElementById('game-play').style.display = 'none'; document.getElementById('options-container').style.display = 'none';
+        map.flyTo([24.5, 121], 7, {duration: 1.5}); applyTheme(''); closeModal(); stopGameTimer(); manageBgm();
+        if (audioTracks.alarm) audioTracks.alarm.pause(); 
+    }
+
+    function startGame(gameType) {
+        activeGame = gameType; currentLevel = 0; generateDynamicGameData(gameType); 
+        document.getElementById('game-menu').style.display = 'none'; document.getElementById('game-play').style.display = 'flex';
+        manageBgm(); showStartGameModal(gameType);
+    }
+
+    function showStartGameModal(gameType) {
+        const modal = document.getElementById('system-modal'); const content = document.getElementById('modal-content-box'); content.className = "modal-content start"; 
+        document.getElementById('modal-title').innerHTML = "📡 系統連線中";
+        let introText = "";
+        if(gameType === 1) introText = "【模組一：坐標尋寶】<br><br>空間節點已隱藏。<br>宿主，請根據劇本提示，<br>精準盲猜出歷史的錨點。";
+        else if(gameType === 2) introText = "【模組二：台詞配對】<br><br>空間傳送成功，進入記憶深層。<br>宿主，請修復這片錯亂的時空對話。";
+        else if(gameType === 3) introText = "【模組三：心理深潛】<br><br>視覺數據受到情感干擾。<br>宿主，請透過環境與天氣，<br>剖析出殘留的執念本質。";
+        document.getElementById('modal-msg').innerHTML = introText;
+        const btn = document.getElementById('modal-btn'); btn.innerHTML = "確認綁定，開始傳送"; btn.style.display = "inline-block";
+        btn.onclick = () => { closeModal(); loadLevel(); }; modal.style.display = "flex";
+    }
+
+    function loadLevel() {
+        document.getElementById('game-feedback').innerText = "";
+        
+        if (currentLevel >= 5) { 
+            document.getElementById('options-container').style.display = 'none';
+            stopGameTimer(); showGameCompleteModal(); return;
+        }
+
+        document.getElementById('level-badge').innerText = `關卡 ${currentLevel + 1} / 5`;
+        const data = currentGameData[currentLevel]; 
+        document.getElementById('mission-text').innerText = data.hint;
+
+        const optContainer = document.getElementById('options-container');
+        
+        if (activeGame === 1) {
+            optContainer.style.display = 'none'; map.flyTo([28, 118], 5, {duration: 1.5}); applyTheme('intersect');
+        } else if (activeGame === 2) {
+            optContainer.style.display = 'flex'; optContainer.innerHTML = ''; map.flyTo(db[data.loc].coords, 14, {duration: 1.5}); applyTheme(db[data.loc].mode);
+            data.options.forEach((opt, idx) => { optContainer.innerHTML += `<button class="option-btn" onclick="checkAnswer(${idx}, ${data.ans}, true)">${opt}</button>`; });
+        } else if (activeGame === 3) {
+            optContainer.style.display = 'flex'; optContainer.innerHTML = ''; map.flyTo([24.5, 121], 7, {duration: 1}); applyTheme(data.theme);
+            data.options.forEach((opt, idx) => { optContainer.innerHTML += `<button class="option-btn" style="text-align:center; font-weight:bold;" onclick="checkAnswer(${idx}, ${data.ans}, true)">${opt}</button>`; });
+        }
+
+        startGameTimer(); 
+    }
+
+    function closeModal() {
+        document.getElementById('system-modal').style.display = 'none'; document.getElementById('defeat-overlay').style.display = 'none';
+        if (systemTimerId) clearInterval(systemTimerId);
+    }
+
+    function showGameCompleteModal() {
+        const modal = document.getElementById('system-modal'); const content = document.getElementById('modal-content-box'); content.className = "modal-content success"; document.getElementById('modal-title').innerHTML = "✨ 任務達成";
+        if (activeGame < 3) {
+            document.getElementById('modal-msg').innerHTML = "恭喜完成本次任務！<br>請宿主做好準備，即將進入下個挑戰...<br><br><span id='jump-cd' style='font-size:3em; color:var(--accent); font-weight:bold;'>3</span>";
+            document.getElementById('modal-btn').style.display = "none"; modal.style.display = "flex";
+            let jumpTime = 3;
+            systemTimerId = setInterval(() => {
+                jumpTime--; document.getElementById('jump-cd').innerText = jumpTime;
+                if (jumpTime <= 0) { clearInterval(systemTimerId); closeModal(); startGame(activeGame + 1); }
+            }, 1000);
+        } else {
+            document.getElementById('modal-title').innerHTML = "🏆 終極通關"; document.getElementById('modal-msg').innerHTML = "恭喜宿主打破時空輪迴！<br><br>所有記憶碎片已成功修復，<br>你已徹底掌控桃花源系統。";
+            const btn = document.getElementById('modal-btn'); btn.innerHTML = "返回現實 (主選單)"; btn.style.display = "inline-block";
+            btn.onclick = () => { closeModal(); backToMenu(); }; modal.style.display = "flex"; applyTheme('taohua'); 
+        }
+    }
+
+    function triggerError(isTimeout = false) {
+        stopGameTimer(); errorCount++;
+        const modal = document.getElementById('system-modal'); const content = document.getElementById('modal-content-box'); const msg = document.getElementById('modal-msg'); const btn = document.getElementById('modal-btn'); const defeatOverlay = document.getElementById('defeat-overlay');
+        let reasonText = isTimeout ? "時間耗盡，未偵測到宿主行動。" : "選擇錯誤。";
+
+        if (errorCount === 1) {
+            content.className = "modal-content warning"; document.getElementById('modal-title').innerHTML = "⚠️ 系統警告";
+            msg.innerHTML = `${reasonText}<br><br><span style='color:#ff4d4d; font-weight:bold;'>再犯錯一次，則將被抹殺。</span>`;
+            btn.innerHTML = "確認並繼續"; btn.style.display = "inline-block";
+            btn.onclick = () => { closeModal(); startGameTimer(); }; modal.style.display = "flex";
+        } else if (errorCount === 2) {
+            if (currentBgmObj) {
+                currentBgmObj.pause();
+            }
+            if (audioTracks.alarm) {
+                audioTracks.alarm.muted = isMuted;
+                audioTracks.alarm.currentTime = 0;
+                audioTracks.alarm.play().catch(()=>{});
+            }
+
+            defeatOverlay.style.display = "block"; content.className = "modal-content danger"; document.getElementById('modal-title').innerHTML = "☠️ 任務失敗"; btn.style.display = "none";
+            let timeLeft = 5;
+            msg.innerHTML = `已遭到抹殺。<br>數據重置中...<br><br><span id='countdown' style='font-size:4em; color:#ff0000; font-weight:bold; text-shadow: 0 0 20px red;'>${timeLeft}</span>`; modal.style.display = "flex";
+
+            systemTimerId = setInterval(() => {
+                timeLeft--; document.getElementById('countdown').innerText = timeLeft;
+                if (timeLeft <= 0) { 
+                    clearInterval(systemTimerId); defeatOverlay.style.display = "none"; showRebirthModal(); 
+                }
+            }, 1000);
+        }
+    }
+
+    function showRebirthModal() {
+        const modal = document.getElementById('system-modal'); const content = document.getElementById('modal-content-box'); content.className = "modal-content rebirth"; 
+        document.getElementById('modal-title').innerHTML = "🔮 系統重置完畢"; document.getElementById('modal-msg').innerHTML = "<span style='font-size:1.3em; font-weight:bold;'>恭喜宿主重生！</span><br><br>此次重生歸來，<br>請務必奪回屬於你的一切！";
+        
+        if (audioTracks.alarm) {
+            audioTracks.alarm.pause();
+            audioTracks.alarm.currentTime = 0;
+        }
+
+        const btn = document.getElementById('modal-btn'); btn.innerHTML = "⚔️ 接受命運"; btn.style.display = "inline-block";
+        btn.onclick = () => {
+            closeModal();
+            if (currentBgmObj && !isMuted) {
+                currentBgmObj.currentTime = 0;
+                currentBgmObj.play().catch(()=>{});
+            }
+            errorCount = 0; currentLevel = 0; generateDynamicGameData(activeGame); loadLevel(); 
+        };
+        modal.style.display = "flex";
+    }
+
+    function checkAnswer(selected, correct, isMCQ) {
+        stopGameTimer(); 
+        if (selected === correct) {
+            document.getElementById('game-feedback').style.color = "var(--accent)"; document.getElementById('game-feedback').innerText = "✨ 完全正確！";
+            if(isMCQ) document.getElementById('options-container').style.display = 'none';
+            setTimeout(() => { currentLevel++; loadLevel(); }, 1500);
+        } else { triggerError(false); }
+    }
+
+    function handleLocationClick(key) {
+        if (!isGameMode) { updateLoc(key); return; }
+        if (activeGame === 1) { 
+            stopGameTimer(); 
+            const target = currentGameData[currentLevel].target;
+            if (key === target) {
+                document.getElementById('game-feedback').style.color = "var(--accent)"; document.getElementById('game-feedback').innerText = "✨ 找對了！";
+                map.flyTo(db[key].coords, 14, {duration: 1.5}); applyTheme(db[key].mode);
+                setTimeout(() => { currentLevel++; loadLevel(); }, 3000);
+            } else { triggerError(false); }
+        }
+    }
+
+    function setMode(mode) {
+        if (isGameMode) return; 
+        applyTheme(mode); renderList(mode); document.getElementById('detail-section').style.display = 'none';
+        if (currentMarker) { map.removeLayer(currentMarker); currentMarker = null; }
+    }
+
+    function showAll() { renderList('all'); }
+
+    function renderList(filterMode) {
+        locationList.innerHTML = '';
+        const renderGroup = (modeTarget, title) => {
+            let hasItems = false; let html = `<div class="category-title">── ${title} ──</div>`;
+            for (const [key, data] of Object.entries(db)) { if (data.mode === modeTarget) { html += `<button class="loc-btn" onclick="handleLocationClick('${key}')">📍 ${data.title}</button>`; hasItems = true; } }
+            if (hasItems) locationList.innerHTML += html;
+        };
+        if (filterMode === 'all' || filterMode === 'intersect') renderGroup('intersect', '核心演出與現實');
+        if (filterMode === 'all' || filterMode === 'anlian') renderGroup('anlian', '《暗戀》時空');
+        if (filterMode === 'all' || filterMode === 'taohua') renderGroup('taohua', '《桃花源》時空');
+    }
+
+    let currentKey = ''; let currentTab = 'line'; var currentMarker;
+    function updateLoc(key) {
+        currentKey = key; const data = db[key]; applyTheme(data.mode);
+        if (currentMarker) map.removeLayer(currentMarker);
+        map.flyTo(data.coords, 14); currentMarker = L.marker(data.coords).addTo(map);
+        document.getElementById('detail-section').style.display = 'block'; document.getElementById('detail-title').innerText = data.title;
+        const btnHist = document.getElementById('btn-hist');
+        if (data.inBook) btnHist.style.display = 'block'; else { btnHist.style.display = 'none'; if (currentTab === 'hist') currentTab = 'line'; }
+        document.getElementById('btn-line').classList.toggle('active', currentTab === 'line'); btnHist.classList.toggle('active', currentTab === 'hist'); document.getElementById('btn-real-hist').classList.toggle('active', currentTab === 'real-hist');
+        renderContent();
+    }
+
+    function switchTab(tab) { currentTab = tab; document.getElementById('btn-line').classList.toggle('active', tab === 'line'); document.getElementById('btn-hist').classList.toggle('active', tab === 'hist'); document.getElementById('btn-real-hist').classList.toggle('active', tab === 'real-hist'); renderContent(); }
+
+    function renderContent() {
+        const data = db[currentKey]; const contentDiv = document.getElementById('detail-content');
+        if (currentTab === 'line') contentDiv.innerHTML = `<span class="speaker">${data.speaker} 說：</span><div class="quote">${data.line}</div>`;
+        else if (currentTab === 'hist') contentDiv.innerHTML = `<p style="margin-top:5px;">${data.hist}</p>`;
+        else if (currentTab === 'real-hist') contentDiv.innerHTML = `<p style="margin-top:5px;">${data.realHist}</p>`;
+    }
+
+    window.onload = () => { initMapMarkers(true); setMode('intersect'); };
+</script>
+
+</body>
+</html>
